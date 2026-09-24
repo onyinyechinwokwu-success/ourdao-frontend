@@ -77,10 +77,8 @@ export async function POST(req: NextRequest) {
 
   let res: Response
   try {
-    // TODO #145: Server-side Pinata call has no timeout or abort signal.
-    // A hung Pinata API holds this route handler open indefinitely instead of
-    // returning an error response. See src/lib/ipfs.ts for detailed improvement
-    // strategy. Should apply AbortSignal.timeout(SERVER_PINATA_TIMEOUT_MS).
+    // No timeout or abort signal: a hung Pinata API holds this handler open
+    // instead of returning an error response.
     res = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
       method: 'POST',
       headers: { Authorization: `Bearer ${jwt}` },

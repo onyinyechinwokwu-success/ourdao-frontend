@@ -147,33 +147,9 @@ export async function uploadToIPFS(
     processedData = new Uint8Array(fileContent)
   }
 
-  // TODO #145: Client-side document POST has no timeout. Server-side Pinata call
-  // (route.ts:30) also unbounded. Gateway read (line 144) is worst of three.
-  // Public gateways can be slow/unresponsive; stalled reads leave viewer spinning
-  // with no error and no retry (no AbortSignal).
-  //
-  // IMPROVEMENT STRATEGY for all three fetches:
-  // 1. Define separate named constants (not shared — uploads and gateway reads
-  //    have different budgets):
-  //    const CLIENT_UPLOAD_TIMEOUT_MS = 30000;    // 30s for reasonable uplinks
-  //    const SERVER_PINATA_TIMEOUT_MS = 15000;    // 15s for server-side Pinata
-  //    const GATEWAY_READ_TIMEOUT_MS = 8000;      // 8s for gateway reads (tightest)
-  //
-  // 2. Apply AbortSignal.timeout() to all three:
-  //    - Here: const signal = AbortSignal.timeout(CLIENT_UPLOAD_TIMEOUT_MS)
-  //    - route.ts:30 Pinata fetch: add { signal: AbortSignal.timeout(...) }
-  //    - Line 144 gateway fetch: const signal = AbortSignal.timeout(GATEWAY_READ_TIMEOUT_MS)
-  //
-  // 3. Distinguish timeout errors from other failures so users see "Gateway stalled"
-  //    (retryable) vs "Decryption failed" (permanent):
-  //    if (error?.name === 'AbortError') {
-  //      throw new Error('Document fetch timed out — gateway may be overloaded')
-  //    }
-  //
-  // 4. Add test cases for timeout paths in test/ipfs.test.ts and
-  //    test/useDocument.test.tsx. Note: Timing out a pin that Pinata actually
-  //    completed leaves an orphaned pin (acceptable, but comment the trade-off).
-  //
+  // No timeout on this POST: a stalled upload route hangs until the browser gives
+  // up. Gateway reads below are bounded (fetchFromGateways); this call is not.
+
   // TS's Uint8Array is generic over its buffer type as of TS 5.7+; BlobPart
   // requires an ArrayBuffer-backed one specifically, so copy into a fresh
   // Uint8Array to satisfy that (no behavior change) — same fix as
@@ -246,7 +222,8 @@ export function getIPFSUrl(hash: string): string {
   return `${IPFS_GATEWAY}${hash}`
 }
 
-// Validate IPFS hash
+// Validate IPFS hash. Not yet called by getIPFSUrl or downloadFromIPFS, so a
+// malformed hash still flows straight into the gateway URL.
 export function validateIPFSHash(hash: string): boolean {
   // Shape check only — validates format but not cryptographic integrity.
   // CIDv0: Qm followed by 44 base58btc chars (46 total)
@@ -259,57 +236,6 @@ export function validateIPFSHash(hash: string): boolean {
 
   return cidV0Regex.test(hash) || cidV1Regex.test(hash)
 }
-
-/* AUDIT COMMENT - ISSUE #151 & #152 ANALYSIS:
- *
- * CURRENT STATUS: ❌ NEEDS FIXES
- *
- * ISSUE #151 - CID validation is too restrictive:
- * - cidV1Regex hard-codes exactly 59 characters via {58} quantifier
- * - Only accepts base32 prefix 'b', rejects other valid multibase prefixes (f, z, uppercase)
- * - Rejects valid CIDv1 with non-sha2-256 multihashes (different lengths)
- * - Example failures: 60-char CIDv1 strings, 'f'/'z'-prefixed CIDv1
- *
- * ISSUE #152 - Validator is never called:
- * - grep shows this function has exactly ONE occurrence (its declaration)
- * - getIPFSUrl (line 167-169) does bare string interpolation: `${IPFS_GATEWAY}${hash}`
- * - downloadFromIPFS (line 145) uses unvalidated hash in fetch URL
- * - No validation before contract calls either
- * - Malformed/malicious hashes flow straight through to URL construction
- *
- * REQUIRED FIXES:
- * 1. Relax cidV1Regex to accept variable-length hashes and multiple multibase prefixes
- *    - Support common prefixes: b (base32), f (base16), z (base58btc)
- *    - Use length range instead of fixed {58}: CIDv1 multibase has ~7-60 chars after prefix
- * 2. Add explicit comment documenting:
- *    - What IS accepted: CIDv0 (46 chars), CIDv1 with b/f/z prefixes (variable length)
- *    - What is NOT accepted: other multibase prefixes, malformed strings
- *    - This is a SHAPE CHECK only, not cryptographic proof
- * 3. Call validateIPFSHash() before URL construction:
- *    - Modify getIPFSUrl() to validate and throw on failure
- *    - Add validation to downloadFromIPFS() before fetch
- *    - Add validation before contract calls that use hashes
- * 4. Update test/ipfs.test.ts to cover:
- *    - CIDv0 pass case (already in test)
- *    - Common CIDv1 forms (bafybei..., bafkrei...)
- *    - 60-char CIDv1 (should pass after fix)
- *    - Non-base32 prefixes (f-, z-prefixed after fix)
- *    - Invalid formats rejection (clear error message)
- *
- * SUGGESTED UPGRADES:
- * - Consider using a proper CID library (multiformats/cid) for multihash validation
- *   + Pros: Full CID spec compliance, catches more errors
- *   + Cons: +~50KB bundle size for one validation function
- * - Alternative: Regex only but relaxed — accept more prefixes and lengths
- *   + Pros: No dependency, explicit set documented
- *   + Cons: Cannot validate multihash structure itself
- * - Add logging on validation failure (not hard errors initially)
- *   + Helps identify production issues without breaking existing documents
- *
- * SECURITY NOTE: This is NOT currently a security boundary. Hash validation
- * matters for UX (broken images) not security (no sanitization of output URL).
- * If later used as security control, proper URL encoding is also needed.
- */
 
 // Generate document metadata
 export interface DocumentMetadata {

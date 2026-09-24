@@ -70,33 +70,8 @@ export interface BackendEvent {
 
 // --- Fetch helper -----------------------------------------------------------
 
-// TODO #144: Backend fetches currently have no timeout or abort signal. A hung
-// indexer (or dropped route/stalled proxy) leaves each fetch pending indefinitely.
-// With polling on ~15s intervals, stalled requests accumulate and the UI never
-// degrades to the on-chain-only state promised in the module docstring.
-//
-// IMPROVEMENT STRATEGY:
-// 1. Add a named timeout constant shorter than the poll interval (e.g., 5-8s)
-//    const BACKEND_REQUEST_TIMEOUT_MS = 5000; // Must be < poll interval
-//
-// 2. Create a shared request helper that wraps all fetches:
-//    async function fetchWithTimeout<T>(path: string, options: RequestInit): Promise<Response> {
-//      const signal = AbortSignal.timeout(BACKEND_REQUEST_TIMEOUT_MS);
-//      return fetch(`${BACKEND_URL}${path}`, { ...options, signal });
-//    }
-//
-// 3. Route every fetch through it (both get() and patch())
-// 4. Map AbortError to the same empty/null fallback already used for network errors
-//    } catch (error) {
-//      if (error instanceof Error && error.name === 'AbortError') {
-//        // Timeout hit — degrade gracefully like other failures
-//      }
-//      return fallback;
-//    }
-//
-// 5. Add a test case covering the "never settles" timeout path (currently only
-//    "rejects" is tested). Use fake-timers or jsdom AbortSignal.timeout polyfill
-//    if needed (check test/degradation-modes.test.tsx setup).
+// None of these fetches set a timeout or abort signal, so a hung indexer leaves
+// a request pending indefinitely instead of degrading to the on-chain-only state.
 
 async function get<T>(path: string, fallback: T): Promise<T> {
   if (!isBackendConfigured()) return fallback
