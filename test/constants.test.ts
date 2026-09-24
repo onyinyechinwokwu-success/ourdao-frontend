@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { PROPOSAL_STATUS_LABELS, parseGatewayList } from '@/constants'
+import {
+  BASIS_POINTS,
+  GOVERNANCE_PERIOD_FALLBACKS,
+  LOAN_POLICY_FALLBACKS,
+  PROPOSAL_STATUS_LABELS,
+  parseGatewayList,
+} from '@/constants'
 
 describe('PROPOSAL_STATUS_LABELS', () => {
   it('has no label for a cancelled state the contract cannot produce', () => {
@@ -23,5 +29,19 @@ describe('parseGatewayList', () => {
       'https://a.example/ipfs/',
       'https://b.example/ipfs/',
     ])
+  })
+})
+
+describe('policy fallbacks', () => {
+  it('keeps the previous pre-load values', () => {
+    expect(LOAN_POLICY_FALLBACKS).toEqual({
+      minInterestRate: 500,
+      maxInterestRate: 2000,
+      maxLoanDuration: 365 * 24 * 60 * 60,
+      consensusThreshold: 5100,
+    })
+    expect(GOVERNANCE_PERIOD_FALLBACKS.votingPeriod).toBe(7 * 24 * 60 * 60)
+    expect(GOVERNANCE_PERIOD_FALLBACKS.editingPeriod).toBe(3 * 24 * 60 * 60)
+    expect(BASIS_POINTS).toBe(10000)
   })
 })

@@ -6,7 +6,8 @@ import { CONTRACT_ID, isContractConfigured } from '@/lib/stellar'
 import { daoRead } from '@/lib/dao-client'
 import { backend } from '@/lib/backend'
 import type { UserData, DAOStats } from '@/types/dao'
-import { asBigInt, toLoan, toMemberStatus } from '@/lib/dao-mappers'
+import { asBigInt, resolveLoanPolicy, toLoan, toMemberStatus } from '@/lib/dao-mappers'
+import type { UILoanPolicy } from '@/lib/dao-mappers'
 
 export function useDAOContract() {
   return { contractId: CONTRACT_ID, configured: isContractConfigured() }
@@ -81,6 +82,24 @@ export type ExtendedStats = DAOStats & {
     confidentialLoans: boolean
     restaking: boolean
   }
+}
+
+/** The loan policy as the contract currently has it. An admin can change it at
+ *  any time, so it is refetched rather than cached forever; until the first
+ *  read lands the labelled fallbacks stand in (`fromChain` is false). */
+export function useLoanPolicy(): UILoanPolicy {
+  const { data } = useQuery({
+    queryKey: ['loanPolicy'],
+    enabled: isContractConfigured(),
+    queryFn: async () => {
+      const [policy, threshold] = await Promise.all([
+        daoRead.getLoanPolicy(),
+        daoRead.getConsensusThreshold(),
+      ])
+      return { policy, threshold }
+    },
+  })
+  return resolveLoanPolicy(data?.policy, data?.threshold)
 }
 
 export function useDAOStats(): ExtendedStats {

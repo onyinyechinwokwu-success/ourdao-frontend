@@ -9,9 +9,15 @@ import {
   mapTreasuryProposal,
   mapLoan,
   eventLabel,
+  resolveLoanPolicy,
 } from '@/lib/dao-mappers'
 import { MemberStatus } from '@/types/dao'
-import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_AWAITING_FUNDS } from '@/constants'
+import {
+  PROPOSAL_STATUS_LABELS,
+  PROPOSAL_STATUS_AWAITING_FUNDS,
+  LOAN_POLICY_FALLBACKS,
+  GOVERNANCE_PERIOD_FALLBACKS,
+} from '@/constants'
 import type { BackendLoan } from '@/lib/backend'
 
 describe('toLoan', () => {
@@ -265,5 +271,46 @@ describe('eventLabel', () => {
   it('falls back to "Unknown event" for an empty/missing symbol', () => {
     expect(eventLabel(undefined)).toBe('Unknown event')
     expect(eventLabel('')).toBe('Unknown event')
+  })
+})
+
+describe('resolveLoanPolicy', () => {
+  it('uses the chain values when an admin has changed the policy', () => {
+    const policy = resolveLoanPolicy(
+      { min_interest_rate: 100, max_interest_rate: 3500, max_loan_duration: BigInt(86400) },
+      6600
+    )
+    expect(policy).toEqual({
+      minInterestRate: 100,
+      maxInterestRate: 3500,
+      maxLoanDuration: 86400,
+      consensusThreshold: 6600,
+      fromChain: true,
+    })
+  })
+
+  it('falls back, and says so, before the policy has loaded', () => {
+    expect(resolveLoanPolicy(undefined, undefined)).toEqual({
+      ...LOAN_POLICY_FALLBACKS,
+      fromChain: false,
+    })
+  })
+
+  it('falls back per field for anything missing or non-numeric', () => {
+    const policy = resolveLoanPolicy({ min_interest_rate: 'nope', max_interest_rate: 900 }, 5000)
+    expect(policy.minInterestRate).toBe(LOAN_POLICY_FALLBACKS.minInterestRate)
+    expect(policy.maxInterestRate).toBe(900)
+    expect(policy.maxLoanDuration).toBe(LOAN_POLICY_FALLBACKS.maxLoanDuration)
+  })
+
+  it('is not from chain when only the policy has arrived', () => {
+    expect(resolveLoanPolicy({ min_interest_rate: 100 }, null).fromChain).toBe(false)
+  })
+})
+
+describe('mapLoanProposal voting end', () => {
+  it('ends voting one governance voting period after editing ends', () => {
+    const p = mapLoanProposal({ editing_period_end: 1000 })
+    expect(p.votingEndTime).toBe(1000 + GOVERNANCE_PERIOD_FALLBACKS.votingPeriod)
   })
 })

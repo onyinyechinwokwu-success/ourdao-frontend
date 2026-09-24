@@ -1,11 +1,28 @@
-export const DAO_CONSTANTS = {
-  PROPOSAL_EDITING_PERIOD: 3 * 24 * 60 * 60, // 3 days in seconds
-  VOTING_PERIOD: 7 * 24 * 60 * 60, // 7 days in seconds
-  BASIS_POINTS: 10000,
-  DEFAULT_CONSENSUS_THRESHOLD: 5100, // 51%
-  MIN_INTEREST_RATE: 500, // 5% in basis points
-  MAX_INTEREST_RATE: 2000, // 20% in basis points
-  DEFAULT_REPAYMENT_TERM: 365 * 24 * 60 * 60, // 1 year in seconds
+/** Basis-point denominator. A genuine constant, not a policy value. */
+export const BASIS_POINTS = 10000
+
+/**
+ * Pre-load fallbacks for values the contract owns. Every one has an on-chain
+ * counterpart (`get_loan_policy` / `get_consensus_threshold`) that an admin can
+ * change via `set_loan_policy` / `set_consensus_threshold`, so never compute
+ * against these once the policy has loaded: use `resolveLoanPolicy` /
+ * `useLoanPolicy`, which prefer the chain's values.
+ */
+export const LOAN_POLICY_FALLBACKS = {
+  minInterestRate: 500, // 5% in basis points
+  maxInterestRate: 2000, // 20% in basis points
+  maxLoanDuration: 365 * 24 * 60 * 60, // 1 year in seconds
+  consensusThreshold: 5100, // 51%
+} as const
+
+/**
+ * Governance periods the contract enforces but does not expose through any
+ * view, so they cannot be read yet. They are assumptions and may drift from
+ * the chain; replace with a contract read as soon as one exists.
+ */
+export const GOVERNANCE_PERIOD_FALLBACKS = {
+  editingPeriod: 3 * 24 * 60 * 60, // 3 days in seconds
+  votingPeriod: 7 * 24 * 60 * 60, // 7 days in seconds
 } as const
 
 export const MEMBER_STATUS_LABELS = {
