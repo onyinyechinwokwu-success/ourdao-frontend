@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { vi } from 'vitest'
-import { downloadFromIPFS, getIPFSUrl, uploadToIPFS, encryptData, decryptData } from '@/lib/ipfs'
+import {
+  downloadFromIPFS,
+  getIPFSUrl,
+  uploadToIPFS,
+  uploadMultipleDocuments,
+  encryptData,
+  decryptData,
+} from '@/lib/ipfs'
 
 function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500) {
   return { ok, status, json: () => Promise.resolve(body), text: () => Promise.resolve('') } as Response
@@ -134,6 +141,53 @@ describe('uploadToIPFS', () => {
     const file = new File(['hello'], 'doc.txt', { type: 'text/plain' })
 
     await expect(uploadToIPFS(file)).rejects.toThrow('network error')
+  })
+})
+
+describe('uploadMultipleDocuments', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const makeFiles = () => [
+    new File(['one'], 'one.txt', { type: 'text/plain' }),
+    new File(['two'], 'two.txt', { type: 'text/plain' }),
+  ]
+
+  it('applies the given permissions to every uploaded document', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ hash: 'QmOne' }))
+      .mockResolvedValueOnce(jsonResponse({ hash: 'QmTwo' }))
+    const permissions = { public: false, allowedUsers: ['GALICE'], allowedRoles: ['admin'] }
+
+    const docs = await uploadMultipleDocuments(makeFiles(), false, undefined, undefined, permissions)
+
+    expect(docs.map(d => d.hash)).toEqual(['QmOne', 'QmTwo'])
+    expect(docs.map(d => d.permissions)).toEqual([permissions, permissions])
+  })
+
+  it('keeps the existing default when no permissions are given', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ hash: 'QmOne' }))
+      .mockResolvedValueOnce(jsonResponse({ hash: 'QmTwo' }))
+
+    const docs = await uploadMultipleDocuments(makeFiles())
+
+    expect(docs.map(d => d.permissions)).toEqual([{ public: true }, { public: true }])
+  })
+
+  it('reports progress as a percentage after each file', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ hash: 'QmOne' }))
+      .mockResolvedValueOnce(jsonResponse({ hash: 'QmTwo' }))
+    const onProgress = vi.fn()
+
+    await uploadMultipleDocuments(makeFiles(), false, undefined, onProgress)
+
+    expect(onProgress.mock.calls.map(c => c[0])).toEqual([50, 100])
   })
 })
 
