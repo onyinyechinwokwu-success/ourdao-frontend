@@ -5,6 +5,7 @@ import {
   getIPFSUrl,
   uploadToIPFS,
   uploadMultipleDocuments,
+  createDocumentMetadata,
   encryptData,
   decryptData,
 } from '@/lib/ipfs'
@@ -143,6 +144,24 @@ describe('uploadToIPFS', () => {
   })
 })
 
+describe('createDocumentMetadata', () => {
+  const file = new File(['x'], 'a.txt', { type: 'text/plain' })
+
+  it('defaults an unencrypted document to closed, not public', () => {
+    expect(createDocumentMetadata(file, 'Qm1', false).permissions).toEqual({ public: false })
+  })
+
+  it('defaults an encrypted document to closed', () => {
+    expect(createDocumentMetadata(file, 'Qm1', true).permissions).toEqual({ public: false })
+  })
+
+  it('makes a document public only when the caller says so', () => {
+    expect(createDocumentMetadata(file, 'Qm1', false, { public: true }).permissions).toEqual({
+      public: true,
+    })
+  })
+})
+
 describe('uploadMultipleDocuments', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
@@ -168,14 +187,14 @@ describe('uploadMultipleDocuments', () => {
     expect(docs.map(d => d.permissions)).toEqual([permissions, permissions])
   })
 
-  it('keeps the existing default when no permissions are given', async () => {
+  it('defaults every document to closed when no permissions are given', async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse({ hash: 'QmOne' }))
       .mockResolvedValueOnce(jsonResponse({ hash: 'QmTwo' }))
 
     const docs = await uploadMultipleDocuments(makeFiles())
 
-    expect(docs.map(d => d.permissions)).toEqual([{ public: true }, { public: true }])
+    expect(docs.map(d => d.permissions)).toEqual([{ public: false }, { public: false }])
   })
 
   it('reports progress as a percentage after each file', async () => {

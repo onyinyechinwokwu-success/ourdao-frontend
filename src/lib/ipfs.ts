@@ -340,7 +340,9 @@ export function createDocumentMetadata(
     uploadedAt: new Date(),
     encrypted,
     hash,
-    permissions: permissions || { public: !encrypted }
+    // Closed unless the caller says otherwise: encryption and public access are
+    // separate decisions, so not encrypting must never imply "anyone may read".
+    permissions: permissions || { public: false }
   }
 }
 
